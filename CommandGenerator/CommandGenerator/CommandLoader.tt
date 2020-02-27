@@ -1,0 +1,21 @@
+﻿<#@ template debug="false" hostspecific="true" language="C#" #>
+<#@ assembly name="System.Core" #>
+<#@ assembly name="System.Xml"#>
+<#@ assembly name="System.IO"#>
+<#@ assembly name="EnvDTE" #>
+<#@ import namespace="EnvDTE" #>
+<#@ import namespace="System.IO"#>
+<#@ import namespace="System.Xml" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Text" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#@ output extension=".cs" #> 
+
+<#
+var serviceProvider = this.Host as IServiceProvider;
+var dte = serviceProvider.GetService(typeof(DTE)) as DTE;
+string projectDir = Host.ResolveAssemblyReference("$(ProjectDir)");
+XmlDocument doc = new XmlDocument();
+// Load prototype.xml
+doc.Load(Path.Combine(projectDir, @"./Commands.xml"));
+#>

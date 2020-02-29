@@ -3,6 +3,7 @@
 <#@ assembly name="System.Xml" #>
 <#@ assembly name="System.IO" #>
 <#@ assembly name="System.Design" #>
+<#@ assembly name="System.Windows.Forms" #>
 <#@ assembly name="EnvDTE" #>
 <#@ assembly name="VSLangProj" #>
 <#@ import namespace="EnvDTE" #>
@@ -39,45 +40,77 @@ manager.Process(true);
 #><#+
 private void Generate(List<CustomCommand> cmds, Manager manager, DirectoryInfo t4DirInfo) 
 {
-	foreach (CustomCommand cmd in cmds) 
-	{
-		manager.StartNewFile(cmd.name + ".cs");
-        StringBuilder sb = new StringBuilder();
-        sb.Append("public class ");
-		if (cmd.isComposite)
-            sb.AppendLine(cmd.name);
-        else
-            sb.AppendLine(cmd.name);
+    var hostServiceProvider = (IServiceProvider) Host;
+    var dte = (EnvDTE.DTE) hostServiceProvider.GetService(typeof(EnvDTE.DTE));
+    var projectItem = dte.Solution.FindProjectItem(Host.TemplateFile);
 
-        sb.Append("{");
-        sb.AppendLine("");
-        sb.AppendLine("\tpublic string DisplayName => \"" + cmd.displayName + "\";");
+    string resxFileName = Path.Combine(t4DirInfo.FullName, "CommandResources.resx");
+    using (ResXResourceWriter resx = new ResXResourceWriter(resxFileName)) 
+    {
+	    foreach (CustomCommand cmd in cmds) 
+	    {
+		    manager.StartNewFile(cmd.name + ".cs");
+            StringBuilder sb = new StringBuilder();
+            sb.AppendLine("namespace " + projectItem.ContainingProject.Name);
+            sb.AppendLine("{\n");
+            sb.Append("\tpublic class ");
+		    if (cmd.isComposite)
+                sb.AppendLine(cmd.name);
+            else
+                sb.AppendLine(cmd.name);
 
-        foreach (CustomProperty prop in cmd.properties)
-        {
-            sb.Append("\tpublic virtual ");
-            sb.Append(prop.type);
-            sb.Append(" ");
-            sb.Append(prop.name);
-            sb.Append(" { get; set; }");
-            sb.AppendLine("// Mapping " + prop.mapping ?? "Not mapped to db");
+            sb.Append("\t{");
+            sb.AppendLine("");
+            string displayName = cmd.name + "Name";
+            sb.AppendLine("\t\tpublic string DisplayName => CommandResources." + displayName + ";");
+            resx.AddResource(displayName, cmd.displayName);
+
+            foreach (CustomProperty prop in cmd.properties)
+            {
+                sb.Append("\t\tpublic virtual ");
+                sb.Append(prop.type);
+                sb.Append(" ");
+                sb.Append(prop.name);
+                sb.Append(" { get; set; }");
+                sb.AppendLine("// Mapping " + prop.mapping ?? "Not mapped to db");
+            }
+
+            sb.AppendLine("\n");
+
+            // Default protected constructor
+            sb.Append("\t\tprotected ");
+            sb.Append(cmd.name);
+            sb.AppendLine("() {}");
+
+            // Public constructor
+            sb.Append("\t\tpublic ");
+            sb.Append(cmd.name);
+            sb.AppendLine("(string test) {}");
+
+            sb.AppendLine("\t}\n");
+            sb.Append("}");
+            Write(sb.ToString());
+		    manager.EndBlock();
         }
 
-        sb.AppendLine("\n");
-
-        // Default protected constructor
-        sb.Append("\tprotected ");
-        sb.Append(cmd.name);
-        sb.AppendLine("() {}");
-
-        // Public constructor
-        sb.Append("\tpublic ");
-        sb.Append(cmd.name);
-        sb.AppendLine("(string test) {}");
-
-        sb.Append("}");
-        Write(sb.ToString());
-		manager.EndBlock();
+        resx.Generate();
+        resx.Close();
 	}
+
+    manager.StartNewFile(resxFileName);
+    Write(File.ReadAllText(resxFileName));
+    manager.EndBlock();
+
+    SetAndRunResXFileCodeGenerator(t4DirInfo, resxFileName);
+}
+
+private void SetAndRunResXFileCodeGenerator(DirectoryInfo t4DirInfo, string fileName, string nameSpace = "")
+{
+    var hostServiceProvider = (IServiceProvider) Host;
+    var dte = (EnvDTE.DTE) hostServiceProvider.GetService(typeof(EnvDTE.DTE));
+    var projectItem = dte.Solution.FindProjectItem(fileName);
+    projectItem.Properties.Item("CustomTool").Value = "PublicResXFileCodeGenerator";
+    projectItem.Properties.Item("CustomToolNamespace").Value = nameSpace;
+    ((VSProjectItem)projectItem.Object).RunCustomTool();
 }
 #>

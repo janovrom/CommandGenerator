@@ -3,5 +3,18 @@
 <#@ import namespace="System.Text" #>
 <#@ import namespace="System.Collections.Generic" #>
 <#+
+public class CustomCommand
+{
+    public bool isComposite;
+    public string name;
+    public string displayName;
+    public List<CustomProperty> properties = new List<CustomProperty>();
+}
 
+public class CustomProperty
+{
+    public string type;
+    public string name;
+    public string mapping;
+}
 #>

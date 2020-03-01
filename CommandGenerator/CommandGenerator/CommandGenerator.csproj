@@ -43,14 +43,24 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AddObjectCommand.cs">
+      <DependentUpon>CommandLoader.tt</DependentUpon>
+    </Compile>
+    <Compile Include="CommandResources.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>CommandResources.resx</DependentUpon>
+    </Compile>
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="SetMultipleValuesCommand.cs">
+      <DependentUpon>CommandLoader.tt</DependentUpon>
+    </Compile>
     <Compile Include="TestClass.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
     <None Include="CommandReader.ttinclude" />
-    <None Include="MultipleOutput.ttinclude" />
     <None Include="MultipleOutputHelper.ttinclude" />
     <None Include="CommandSchema.ttinclude" />
   </ItemGroup>
@@ -68,6 +78,13 @@
   </ItemGroup>
   <ItemGroup>
     <Service Include="{508349B6-6B84-4DF5-91F0-309BEEBAD82D}" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="CommandResources.resx">
+      <DependentUpon>CommandLoader.tt</DependentUpon>
+      <Generator>PublicResXFileCodeGenerator</Generator>
+      <LastGenOutput>CommandResources.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

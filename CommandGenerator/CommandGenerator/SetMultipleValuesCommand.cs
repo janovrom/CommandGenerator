@@ -1,7 +1,7 @@
 namespace CommandGenerator
 {
 
-	public class SetMultipleValuesCommand
+	public partial class SetMultipleValuesCommand
 	{
 		public string DisplayName => CommandResources.SetMultipleValuesCommandName;
 		public virtual string ChangedObject { get; set; }// Mapping ManyToOne

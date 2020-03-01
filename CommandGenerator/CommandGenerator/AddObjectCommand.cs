@@ -1,7 +1,7 @@
 namespace CommandGenerator
 {
 
-	public class AddObjectCommand
+	public partial class AddObjectCommand
 	{
 		public string DisplayName => CommandResources.AddObjectCommandName;
 		public virtual string ChangedObject { get; set; }// Mapping manytoone

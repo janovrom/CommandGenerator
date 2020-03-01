@@ -17,9 +17,10 @@
 <#@ import namespace="System.Linq" #>
 <#@ import namespace="System.Text" #>
 <#@ import namespace="System.Collections.Generic" #>
+<#@ import namespace="Microsoft.VisualStudio.TextTemplating" #>
 <#@ include file="CommandSchema.ttinclude" #>
 <#@ include file="CommandReader.ttinclude" #>
-<#@ include file="MultipleOutputHelper.ttinclude" #>
+
 <#@ output extension=".txt" #> 
 <#
 var serviceProvider = this.Host as IServiceProvider;
@@ -31,11 +32,11 @@ doc.Load(Path.Combine(projectDir, @"./Commands.xml"));
 
 List<CustomCommand> cmds = Read(doc);
 
-var manager = Manager.Create(Host, GenerationEnvironment);
+var manager = new Manager(Host);
 var t4DirInfo = new FileInfo(Host.TemplateFile).Directory;
-
+  
 Generate(cmds, manager, t4DirInfo);
-manager.Process(true);
+manager.Process();
 
 #><#+
 private void Generate(List<CustomCommand> cmds, Manager manager, DirectoryInfo t4DirInfo) 
@@ -49,58 +50,58 @@ private void Generate(List<CustomCommand> cmds, Manager manager, DirectoryInfo t
     {
 	    foreach (CustomCommand cmd in cmds) 
 	    {
-		    manager.StartNewFile(cmd.name + ".cs");
-            StringBuilder sb = new StringBuilder();
-            sb.AppendLine("namespace " + projectItem.ContainingProject.Name);
-            sb.AppendLine("{\n");
-            sb.Append("\tpublic class ");
+		    manager.Start(cmd.name + ".cs");
+		    //manager.StartNewFile(cmd.name + ".cs");
+            manager.WriteLine("namespace " + projectItem.ContainingProject.Name);
+            manager.WriteLine("{\n");
+            manager.Write("\tpublic partial class ");
 		    if (cmd.isComposite)
-                sb.AppendLine(cmd.name);
+                manager.WriteLine(cmd.name);
             else
-                sb.AppendLine(cmd.name);
+                manager.WriteLine(cmd.name);
 
-            sb.Append("\t{");
-            sb.AppendLine("");
+            manager.Write("\t{");
+            manager.WriteLine("");
             string displayName = cmd.name + "Name";
-            sb.AppendLine("\t\tpublic string DisplayName => CommandResources." + displayName + ";");
+            manager.WriteLine("\t\tpublic string DisplayName => CommandResources." + displayName + ";");
             resx.AddResource(displayName, cmd.displayName);
 
             foreach (CustomProperty prop in cmd.properties)
             {
-                sb.Append("\t\tpublic virtual ");
-                sb.Append(prop.type);
-                sb.Append(" ");
-                sb.Append(prop.name);
-                sb.Append(" { get; set; }");
-                sb.AppendLine("// Mapping " + prop.mapping ?? "Not mapped to db");
+                manager.Write("\t\tpublic virtual ");
+                manager.Write(prop.type);
+                manager.Write(" ");
+                manager.Write(prop.name);
+                manager.Write(" { get; set; }");
+                manager.WriteLine("// Mapping " + prop.mapping ?? "Not mapped to db");
             }
 
-            sb.AppendLine("\n");
+            manager.WriteLine("\n");
 
             // Default protected constructor
-            sb.Append("\t\tprotected ");
-            sb.Append(cmd.name);
-            sb.AppendLine("() {}");
+            manager.Write("\t\tprotected ");
+            manager.Write(cmd.name);
+            manager.WriteLine("() {}");
 
             // Public constructor
-            sb.Append("\t\tpublic ");
-            sb.Append(cmd.name);
-            sb.AppendLine("(string test) {}");
+            manager.Write("\t\tpublic ");
+            manager.Write(cmd.name);
+            manager.WriteLine("(string test) {}");
 
-            sb.AppendLine("\t}\n");
-            sb.Append("}");
-            Write(sb.ToString());
-		    manager.EndBlock();
+            manager.WriteLine("\t}\n");
+            manager.Write("}");
         }
 
         resx.Generate();
         resx.Close();
 	}
 
-    manager.StartNewFile(resxFileName);
-    Write(File.ReadAllText(resxFileName));
-    manager.EndBlock();
+    //manager.StartNewFile(resxFileName);
+    manager.Start(resxFileName);
+    manager.Write(File.ReadAllText(resxFileName));
+    //manager.EndBlock();
 
+    manager.Process();
     SetAndRunResXFileCodeGenerator(t4DirInfo, resxFileName);
 }
 
@@ -113,4 +114,106 @@ private void SetAndRunResXFileCodeGenerator(DirectoryInfo t4DirInfo, string file
     projectItem.Properties.Item("CustomToolNamespace").Value = nameSpace;
     ((VSProjectItem)projectItem.Object).RunCustomTool();
 }
+
+class Manager 
+{
+    
+    private class FileBlock
+    {
+        internal StringBuilder file = new StringBuilder();
+        internal String name;
+
+        public FileBlock(String name)
+        {
+            this.name = name;
+        }
+    }
+
+    private List<FileBlock> _fileBlocks = new List<FileBlock>();
+    private EnvDTE.DTE dte;
+    private EnvDTE.ProjectItem templateProjectItem;
+    private String outputPath;
+    private Action<IEnumerable<String>> projectSyncAction;
+
+
+    internal Manager(ITextTemplatingEngineHost host) 
+    {
+        var hostServiceProvider = (IServiceProvider) host;
+        if (hostServiceProvider == null)
+                throw new ArgumentNullException("Could not obtain IServiceProvider");
+        dte = (EnvDTE.DTE) hostServiceProvider.GetService(typeof(EnvDTE.DTE));
+        if (dte == null)
+            throw new ArgumentNullException("Could not obtain DTE from host");
+        templateProjectItem = dte.Solution.FindProjectItem(host.TemplateFile);
+        outputPath = Path.GetDirectoryName(host.TemplateFile);
+        projectSyncAction = (IEnumerable<String> keepFileNames) => ProjectSync(templateProjectItem, keepFileNames);
+    }
+
+    public void Start(String filename) 
+    {
+        _fileBlocks.Add(new FileBlock(filename));
+    }
+
+    public void Write(string text)
+    {
+        _fileBlocks[_fileBlocks.Count - 1].file.Append(text);
+    }
+
+    public void WriteLine(string text)
+    {
+        _fileBlocks[_fileBlocks.Count - 1].file.AppendLine(text);
+    }
+
+    private bool IsFileContentDifferent(String fileName, String newContent) {
+        return !(File.Exists(fileName) && File.ReadAllText(fileName) == newContent);
+    }
+
+    private void CreateFile(String fileName, String content) {
+        if (IsFileContentDifferent(fileName, content))
+            File.WriteAllText(fileName, content);
+    }
+
+    public void Process()
+    {
+        List<String> generatedFileNames = new List<String>();
+        foreach (FileBlock fb in _fileBlocks)
+        {
+            var fileName = Path.Combine(outputPath, fb.name);
+            CreateFile(fileName, fb.file.ToString());
+            generatedFileNames.Add(fileName);
+        }
+
+        projectSyncAction.EndInvoke(projectSyncAction.BeginInvoke(generatedFileNames, null, null));
+    }
+
+    private static void ProjectSync(EnvDTE.ProjectItem templateProjectItem, IEnumerable<String> keepFileNames)
+    {
+        var keepFileNameSet = new HashSet<String>(keepFileNames);
+        var originalFilePrefix = Path.GetFileNameWithoutExtension(templateProjectItem.Name) + ".";
+        var projectFiles = new Dictionary<String, EnvDTE.ProjectItem>();
+        foreach (EnvDTE.ProjectItem item in templateProjectItem.ProjectItems) 
+        {
+            // Get current items under the template
+            projectFiles.Add(item.get_FileNames(0), item);
+        }
+
+        // Remove unused items
+        foreach (var pair in projectFiles)
+        {
+            if (!keepFileNameSet.Contains(pair.Key) && !(Path.GetFileNameWithoutExtension(pair.Key) + ".").StartsWith(originalFilePrefix))
+                pair.Value.Delete();
+        }
+
+        // Add missing files
+        foreach (String filename in keepFileNameSet) 
+        {
+            if (!projectFiles.ContainsKey(filename)) 
+            {
+                templateProjectItem.ProjectItems.AddFromFile(filename);
+            }
+        }
+    }
+
+}
+
 #>

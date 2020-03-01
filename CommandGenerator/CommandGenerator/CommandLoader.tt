@@ -20,9 +20,7 @@
 <#@ import namespace="Microsoft.VisualStudio.TextTemplating" #>
 <#@ include file="CommandSchema.ttinclude" #>
 <#@ include file="CommandReader.ttinclude" #>
-
-<#@ output extension=".txt" #> 
-<#
+<#@ output extension=".txt" #><#
 var serviceProvider = this.Host as IServiceProvider;
 var dte = serviceProvider.GetService(typeof(DTE)) as DTE;
 string projectDir = Host.ResolveAssemblyReference("$(ProjectDir)");
@@ -37,7 +35,6 @@ var t4DirInfo = new FileInfo(Host.TemplateFile).Directory;
   
 Generate(cmds, manager, t4DirInfo);
 manager.Process();
-
 #><#+
 private void Generate(List<CustomCommand> cmds, Manager manager, DirectoryInfo t4DirInfo) 
 {
@@ -73,7 +70,10 @@ private void Generate(List<CustomCommand> cmds, Manager manager, DirectoryInfo t
                 manager.Write(" ");
                 manager.Write(prop.name);
                 manager.Write(" { get; set; }");
-                manager.WriteLine("// Mapping " + prop.mapping ?? "Not mapped to db");
+                if (prop.mapping == null)
+                    Write("Property " + prop.name + " is not mapped to db.");
+
+                manager.WriteLine("// Mapping " + (prop.mapping == null ? "Not mapped to db" : prop.mapping));
             }
 
             manager.WriteLine("\n");
@@ -100,7 +100,7 @@ private void Generate(List<CustomCommand> cmds, Manager manager, DirectoryInfo t
     manager.Start(resxFileName);
     manager.Write(File.ReadAllText(resxFileName));
     //manager.EndBlock();
-
+    
     manager.Process();
     SetAndRunResXFileCodeGenerator(t4DirInfo, resxFileName);
 }
@@ -215,5 +215,4 @@ class Manager
     }
 
 }
-
 #>

@@ -3,9 +3,7 @@
 <#@ import namespace="System.Linq" #>
 <#@ import namespace="System.Text" #>
 <#@ import namespace="System.Collections.Generic" #>
-<#@ import namespace="System.Xml" #>
-<#+
-
+<#@ import namespace="System.Xml" #><#+
 CustomCommand GetCommand(XmlNode node, bool isComposite)
 {
     CustomCommand cmd = new CustomCommand();

@@ -5,7 +5,7 @@ namespace CommandGenerator
 	{
 		public string DisplayName => CommandResources.AddObjectCommandName;
 		public virtual string ChangedObject { get; set; }// Mapping manytoone
-		public virtual object RandomValue { get; set; }// Mapping 
+		public virtual object RandomValue { get; set; }// Mapping Not mapped to db
 
 
 		protected AddObjectCommand() {}

@@ -184,6 +184,7 @@ class Manager
         }
 
         projectSyncAction.EndInvoke(projectSyncAction.BeginInvoke(generatedFileNames, null, null));
+        templateProjectItem.ContainingProject.Save();
     }
 
     private static void ProjectSync(EnvDTE.ProjectItem templateProjectItem, IEnumerable<String> keepFileNames)

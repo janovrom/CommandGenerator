@@ -1,0 +1,359 @@
+using System;
+using Creator.Modules.Scene3DDesigner.Core.Entities.SceneGraph;
+using Creator.Modules.Scene3DDesigner.Core.Entities.SceneGraph.SceneObjects;
+using Creator.Modules.Scene3DDesigner.Core.Properties;
+using NHibernate;
+using Creator.Modules.Scene3DDesigner.Core.Entities.SceneGraph;
+using Creator.Modules.Scene3DDesigner.Core.Animations;
+using Creator.Modules.Scene3DDesigner.Core.Repositories;
+using Misterine.Viper.Creator.Shared.Bases.Commands;
+using System.Collections.Generic;
+using Creator.Modules.Scene3DDesigner.Core.Entities.SceneGraph.Extensions;
+
+namespace Creator.Modules.Scene3DDesigner.Core.Services.Commands
+{
+    public class TranslationCommand : SceneRedoableCommandBase
+    {
+        public override string DisplayName => Resources.TranslateCommandName;
+        public override bool IsPersistable => true;
+
+        public override FontAwesome5.EFontAwesomeIcon DisplayIcon => FontAwesome5.EFontAwesomeIcon.Solid_ArrowsAlt;
+
+        public virtual double OriginalX { get; set; }
+        public virtual double OriginalY { get; set; }
+        public virtual double OriginalZ { get; set; }
+        public virtual double NewX { get; set; }
+        public virtual double NewY { get; set; }
+        public virtual double NewZ { get; set; }
+        public virtual SceneObject SceneObject { get; set; }
+
+
+        protected TranslationCommand()
+        {
+        }
+
+        /// <summary>
+        /// Makes a shallow copy
+        /// </summary>
+        /// <param name="other">Other instance</param>
+        protected TranslationCommand(TranslationCommand other): base(other)
+        {
+            OriginalX = other.OriginalX;
+            OriginalY = other.OriginalY;
+            OriginalZ = other.OriginalZ;
+
+            NewX = other.NewX;
+            NewY = other.NewY;
+            NewZ = other.NewZ;
+
+            SceneObject = other.SceneObject;
+        }
+
+        public TranslationCommand(double x, double y, double z, SceneObject sceneObject, Scene3D scene) :
+            base(scene)
+        {
+            OriginalX = sceneObject.LocalPositionX;
+            OriginalY = sceneObject.LocalPositionY;
+            OriginalZ = sceneObject.LocalPositionZ;
+            NewX = x;
+            NewY = y;
+            NewZ = z;
+            SceneObject = sceneObject;
+        }
+
+        protected override void ExecuteActionImplementation(IStatelessSession session, ISceneDataService sceneDataService)
+        {
+            var viewModel = sceneDataService.GetViewModel(SceneObject);
+            SceneObject.LocalPositionX = NewX;
+            SceneObject.LocalPositionY = NewY;
+            SceneObject.LocalPositionZ = NewZ;
+            viewModel.LocalPosition = new System.Windows.Media.Media3D.Point3D(SceneObject.LocalPositionX, SceneObject.LocalPositionY, SceneObject.LocalPositionZ);
+
+        }
+
+        protected override void ExecuteReverseActionImplementation(IStatelessSession session, ISceneDataService sceneDataService)
+        {
+            var viewModel = sceneDataService.GetViewModel(SceneObject);
+            SceneObject.LocalPositionX = OriginalX;
+            SceneObject.LocalPositionY = OriginalY;
+            SceneObject.LocalPositionZ = OriginalZ;
+            viewModel.LocalPosition = new System.Windows.Media.Media3D.Point3D(SceneObject.LocalPositionX, SceneObject.LocalPositionY, SceneObject.LocalPositionZ);
+        }
+
+        public override ISceneCloneable Clone(Dictionary<object, object> cloneMap)
+        {
+            var clone = new TranslationCommand(this)
+            {
+                SceneObject = cloneMap.GetOrCreateClone(SceneObject)
+            };
+
+            CloneInternals(clone, cloneMap);
+
+            return clone;
+        }
+
+        public override bool Matches(SceneRedoableCommandBase command)
+        {
+            if (!(command is TranslationCommand other))
+                return false;
+
+            if (Math.Abs(OriginalX - other.OriginalX) > 1e-5 ||
+                Math.Abs(OriginalY - other.OriginalY) > 1e-5 ||
+                Math.Abs(OriginalZ - other.OriginalZ) > 1e-5)
+                return false;
+
+            if (Math.Abs(NewX - other.NewX) > 1e-5 ||
+                Math.Abs(NewY - other.NewY) > 1e-5 ||
+                Math.Abs(NewZ - other.NewZ) > 1e-5)
+                return false;
+
+            if (SceneObject == null ^ other.SceneObject == null)
+                return false;
+
+            if (SceneObject != null && !SceneObject.Matches(other.SceneObject))
+                return false;
+
+            return base.Matches(other);
+        }
+
+        public override void PersistCommand(IStatelessSession session)
+        {
+            InsertOrUpdate(session);
+
+            session.Update(SceneObject);
+        }
+    }
+}
+
+
+using Creator.Modules.Scene3DDesigner.Core.Services.Commands;
+using NHibernate.Mapping.ByCode.Conformist;
+
+namespace Creator.Modules.Scene3DDesigner.Core.Mappings.Commands
+{
+    public class TranslationCommandMapping : SubclassMapping<TranslationCommand>
+    {
+        public TranslationCommandMapping()
+        {
+            DiscriminatorValue(@"TranslationCommand");
+
+            Property(x => x.OriginalX, map => map.Column("`OriginalX`"));
+            Property(x => x.OriginalY, map => map.Column("`OriginalY`"));
+            Property(x => x.OriginalZ, map => map.Column("`OriginalZ`"));
+            Property(x => x.NewX, map => map.Column("`NewX`"));
+            Property(x => x.NewY, map => map.Column("`NewY`"));
+            Property(x => x.NewZ, map => map.Column("`NewZ`"));
+
+            ManyToOne(x => x.SceneObject, map =>
+            {
+                map.NotNullable(false);
+                map.Column("`SceneObject`");
+            });
+        }
+    }
+}
+
+
+using Creator.Modules.Scene3DDesigner.Core.Services;
+using Creator.Modules.Scene3DDesigner.Core.Services.Commands;
+using Creator.Modules.Scene3DDesigner.Core.ViewModels.SceneGraph;
+using Prism.Commands;
+using System;
+using System.Windows.Input;
+using System.Windows.Media.Media3D;
+using Creator.Modules.Scene3DDesigner.Core.ViewModels.Components;
+using Creator.Modules.Scene3DDesigner.Core.Events;
+using Creator.Modules.Scene3DDesigner.Core.Animations.Events.Requests;
+using Creator.Modules.Scene3DDesigner.Core.Animations.Events;
+using Creator.Modules.Scene3DDesigner.Core.Animations.ViewModels;
+
+namespace Creator.Modules.Scene3DDesigner.Core.ViewModels.Commands
+{
+    public class TranslateCommandViewModel : CommandViewModel
+    {
+        private readonly SceneObjectViewModel _context;
+        
+        private double _offsetX;
+        private double _offsetY;
+        private double _offsetZ;
+        private bool _isDirty = false;
+
+        public ICommand OnTranslatedCommand { get; set; }
+        public ICommand ResetCommand { get; set; }
+
+        public double OffsetX
+        {
+            get => _offsetX;
+            set
+            {
+                var oldOffset = new Point3D(_offsetX, _offsetY, _offsetZ);
+                if (SetProperty(ref _offsetX, value))
+                {
+                    OnOffsetChanged(oldOffset);
+                    _isDirty = true;
+                }
+            }
+        }
+
+        public double OffsetY
+        {
+            get => _offsetY;
+            set
+            {
+                var oldOffset = new Point3D(_offsetX, _offsetY, _offsetZ);
+                if (SetProperty(ref _offsetY, value))
+                {
+                    OnOffsetChanged(oldOffset);
+                    _isDirty = true;
+                }
+            }
+        }
+
+        public double OffsetZ
+        {
+            get => _offsetZ;
+            set
+            {
+                var oldOffset = new Point3D(_offsetX, _offsetY, _offsetZ);
+                if (SetProperty(ref _offsetZ, value))
+                {
+                    OnOffsetChanged(oldOffset);
+                    _isDirty = true;
+                }
+            }
+        }
+
+        private bool _isAnimated = false;
+        public bool IsAnimated
+        {
+            get => _isAnimated;
+            set => SetProperty(ref _isAnimated, value);
+        }
+
+        public ICommand AnimatePropertyCommand { get; set; } 
+
+
+        public TranslateCommandViewModel(SceneObjectViewModel context, ISceneHistoryService historyService, ISceneDataService sceneDataService) :
+            base(historyService, sceneDataService)
+        {
+            _context = context;
+
+            if (_context.IsAnimated)
+                IsAnimated = _context.AnimationComponent.AnimationViewModel.IsPositionAnimated;
+
+            RegisterEventHandlers();
+            CreateCommands();
+            ResetToOriginalValues();
+        }
+
+        private void RegisterEventHandlers()
+        {
+            _context.TransformChanged += OnTransformChangedExternally;
+            EventSystem.Instance.GetEvent<PropertyAnimatedEvent>().Subscribe(OnPropertyAnimated);
+        }
+
+        private void OnPropertyAnimated(PropertyAnimatedPayload obj)
+        {
+            if (obj.AnimatedObject == _context && obj.AnimatedPropertyName == nameof(SceneObjectViewModel.LocalPosition))
+            {
+                IsAnimated = obj.IsAnimated;
+            }
+        }
+
+        private void UnRegisterEventHandlers()
+        {
+            _context.TransformChanged -= OnTransformChangedExternally;
+            EventSystem.Instance.GetEvent<PropertyAnimatedEvent>().Unsubscribe(OnPropertyAnimated);
+        }
+
+        private void CreateCommands()
+        {
+            OnTranslatedCommand = new DelegateCommand(OnTranslated);
+            ResetCommand = new DelegateCommand(Reset);
+        }
+
+        private void Reset()
+        {
+            ResetModel();
+            ResetToOriginalValues();
+            _isDirty = false;
+        }
+
+        private void ResetModel()
+        {
+            var newOffset = new Point3D(OffsetX, OffsetY, OffsetZ);
+            var originalPosition = new Point3D(_context.Original.LocalPositionX, _context.Original.LocalPositionY, _context.Original.LocalPositionZ);
+
+            if (originalPosition == newOffset)
+                return;
+
+            _context.TransformChanged -= OnTransformChangedExternally;
+            _context.LocalPosition = originalPosition;
+            _context.TransformChanged += OnTransformChangedExternally;
+        }
+
+        private void OnTransformChangedExternally(object sender, EventArgs e)
+        {
+            ResetToOriginalValues();
+        }
+
+        private void ResetToOriginalValues()
+        {
+            _offsetX = _context.LocalPosition.X;
+            _offsetY = _context.LocalPosition.Y;
+            _offsetZ = _context.LocalPosition.Z;
+
+            RaisePropertyChanged(nameof(OffsetX));
+            RaisePropertyChanged(nameof(OffsetY));
+            RaisePropertyChanged(nameof(OffsetZ));
+        }
+
+        private void OnTranslated()
+        {
+            if (!_isDirty)
+            {
+                return;
+            }
+
+            if (_context.Original == null)
+            {
+                // The original was deleted from scene
+                ResetToOriginalValues();
+                return;
+            }
+
+            if (!_context.IsAnimated)
+            {
+                var command = new TranslationCommand(_offsetX, _offsetY, _offsetZ,
+                                                     _context.Original, _sceneDataService.ActiveScene);
+                _historyService.DoAction(command);
+            }
+            else
+            {
+                if (AnimationComponent.AutoAnimating)
+                {
+                    EventSystem.Instance.GetEvent<AnimatePositionRequest>().Publish();
+                }
+            }
+
+            _isDirty = false;
+        }
+
+        private void OnOffsetChanged(Point3D oldOffset)
+        {
+            var newOffset = new Point3D(_offsetX, _offsetY, _offsetZ);
+
+            if (oldOffset == newOffset)
+                return;
+
+            _context.TransformChanged -= OnTransformChangedExternally;
+            _context.LocalPosition = newOffset;
+            _context.TransformChanged += OnTransformChangedExternally;
+        }
+
+        public override void Dispose()
+        {
+            UnRegisterEventHandlers();
+        }
+    }
+}

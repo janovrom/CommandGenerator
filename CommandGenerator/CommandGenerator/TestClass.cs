@@ -7,8 +7,10 @@ using System.Xml;
 
 public class CustomCommand
 {
-    public bool isComposite;
     public string name;
+    public string cmdNamespace;
+    public string parentName;
+    public string parentNamespace;
     public string displayName;
     public List<CustomProperty> properties = new List<CustomProperty>();
 }
@@ -20,20 +22,46 @@ public class CustomProperty
     public string mapping;
 }
 
-public class TestClass { 
-    CustomCommand GetCommand(XmlNode node, bool isComposite)
+public abstract class SharedCmd
+{
+
+    public abstract string DisplayName { get; }
+    public abstract bool IsPersistable { get; }
+
+}
+
+public abstract class MultiCmd : SharedCmd
+{
+}
+
+public abstract class SingleCmd : SharedCmd
+{
+}
+
+public class TestClass {
+    CustomCommand GetCommand(XmlNode node, string parentName, string parentNamespace)
     {
         CustomCommand cmd = new CustomCommand();
-        cmd.isComposite = isComposite;
+        cmd.parentName = parentName;
+        cmd.parentNamespace = parentNamespace;
         cmd.name = node.Name;
 
+        bool namespaceFound = false;
         foreach (XmlAttribute attribute in node.Attributes)
         {
             if (attribute.Name.ToLowerInvariant().Equals("name"))
             {
                 cmd.displayName = attribute.Value;
             }
+            else if (attribute.Name.ToLowerInvariant().Equals("namespace"))
+            {
+                cmd.cmdNamespace = attribute.Value;
+                namespaceFound = true;
+            }
         }
+
+        if (!namespaceFound)
+            cmd.cmdNamespace = parentNamespace;
 
         foreach (XmlNode property in node.ChildNodes)
         {
@@ -57,18 +85,44 @@ public class TestClass {
     List<CustomCommand> Read(XmlDocument doc)
     {
         XmlNode schema = doc.SelectSingleNode("CommandSchema");
-
-        XmlNode composites = doc.SelectSingleNode("//Composites");
-        XmlNode commands = doc.SelectSingleNode("//Commands");
         List<CustomCommand> cmds = new List<CustomCommand>();
-
-        foreach (XmlNode node in composites.ChildNodes)
-            cmds.Add(GetCommand(node, true));
-
-        foreach (XmlNode node in commands.ChildNodes)
-            cmds.Add(GetCommand(node, false));
+        foreach (XmlNode node in schema.ChildNodes)
+        {
+            string nodeNamespace = node.Attributes["namespace"].Value;
+            string nodeName = node.Name;
+            foreach (XmlNode cmd in node.ChildNodes)
+                cmds.Add(GetCommand(cmd, nodeName, nodeNamespace));
+        }
 
         return cmds;
     }
 
- }
+}
+
+
+namespace NHibernate.Mapping.ByCode.Conformist
+{
+    public class Map
+    {
+        internal void Column(string v)
+        {
+        }
+
+        internal void NotNullable(bool v)
+        {
+        }
+    }
+
+    public abstract class SubclassMapping<T>
+    {
+        public void DiscriminatorValue(string txt) { }
+
+		protected void ManyToOne(Func<T, object> p1, Action<Map> p2)
+		{
+		}
+
+        protected void Property(Func<T, object> p1, Action<Map> p2)
+		{
+		}
+    }
+}

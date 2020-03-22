@@ -6,6 +6,8 @@
 <#@ assembly name="System.Windows.Forms" #>
 <#@ assembly name="EnvDTE" #>
 <#@ assembly name="VSLangProj" #>
+<#@ assembly name="Microsoft.VisualStudio.Editor" #>
+<#@ import namespace="Microsoft.VisualStudio.Editor" #>
 <#@ import namespace="EnvDTE" #>
 <#@ import namespace="VSLangProj" #>
 <#@ import namespace="System" #>
@@ -36,60 +38,166 @@ var t4DirInfo = new FileInfo(Host.TemplateFile).Directory;
 Generate(cmds, manager, t4DirInfo);
 manager.Process();
 #><#+
+private void WriteMapping(CustomCommand cmd, Manager manager, ProjectItem projectItem)
+{
+    var mappingName = cmd.name + "Mapping";
+    var mappingFileName = mappingName +".cs";
+    manager.Start(mappingFileName);
+
+    manager.WriteLine("using NHibernate.Mapping.ByCode.Conformist;");
+    manager.WriteLine("");
+
+    manager.WriteLine("");
+    manager.WriteLine("namespace " + (projectItem.ContainingProject.Name + cmd.cmdNamespace) + ".Mappings");
+    manager.WriteLine("{");
+    
+    // Class in the namespace
+    manager.PushIndent();
+
+    manager.WriteLine();
+    manager.Write("public partial class ");
+    manager.Write(mappingName);
+    manager.Write(" : SubclassMapping<");
+    manager.Write(cmd.name);
+    manager.WriteLine(">");
+
+    manager.WriteLine("{");
+    manager.WriteLine();
+
+    manager.PushIndent();
+
+    manager.Write("public ");
+    manager.Write(mappingName);
+    manager.WriteLine("()");
+    manager.WriteLine("{");
+
+    manager.PushIndent();
+
+    manager.Write("DiscriminatorValue(\"");
+    manager.Write(cmd.name);
+    manager.WriteLine("\");");
+    manager.WriteLine();
+
+    foreach (CustomProperty prop in cmd.properties)
+    {
+        if (prop.mapping == null) continue;
+
+        manager.Write(prop.mapping);
+        manager.Write("(x => x."); 
+        manager.Write(prop.name);
+        manager.WriteLine(", map =>");
+        manager.WriteLine("{");
+        manager.PushIndent();
+
+        if (prop.mapping != "Property")
+        {
+            manager.Write("map.NotNullable(");
+            manager.Write(prop.canBeNull.ToString().ToLowerInvariant());
+            manager.WriteLine(");");
+        }
+
+        manager.WriteLine("map.Column(\"" + prop.name + "\");");
+
+        manager.RemoveIndent();
+
+        manager.WriteLine("});");
+        manager.WriteLine();
+    }
+
+    manager.WriteLine();
+    manager.WriteLine("InitializeOther();");
+
+    manager.RemoveIndent();
+
+    manager.WriteLine("}"); // end constructor
+
+    manager.WriteLine();
+    manager.WriteLine("partial void InitializeOther();");
+
+    manager.RemoveIndent();
+
+    manager.WriteLine();
+    manager.WriteLine("}"); // end class
+
+    // End of the class
+    manager.RemoveIndent();
+
+    manager.WriteLine("}"); // End namespace
+}
+
+private void WriteCommand(CustomCommand cmd, Manager manager, ProjectItem projectItem)
+{
+    manager.Start(cmd.name + ".cs");
+
+	manager.Write("using ");
+    manager.Write(projectItem.ContainingProject.Name + cmd.parentNamespace);
+    manager.WriteLine(";");
+
+    manager.Write("using ");
+    manager.Write(projectItem.ContainingProject.Name); // For resources
+    manager.WriteLine(";");
+
+    manager.WriteLine("");
+    manager.WriteLine("namespace " + (projectItem.ContainingProject.Name + cmd.cmdNamespace));
+    manager.WriteLine("{");
+    manager.WriteLine("");
+    manager.Write("\tpublic partial class ");
+    manager.Write(cmd.name);
+    manager.Write(" : ");
+    manager.WriteLine(cmd.parentName);
+
+    manager.Write("\t{");
+    manager.WriteLine("");
+    string displayName = cmd.name + "Name";
+    manager.WriteLine("\t\tpublic override string DisplayName => CommandResources." + displayName + ";");
+    manager.WriteLine("\t\tpublic override bool IsPersistable => " + cmd.isPersistable.ToString().ToLowerInvariant() + ";");
+                
+    foreach (CustomProperty prop in cmd.properties)
+    {
+        manager.Write("\t\tpublic virtual ");
+        manager.Write(prop.type);
+        manager.Write(" ");
+        manager.Write(prop.name);
+        manager.Write(" { get; set; }");
+        if (prop.mapping == null)
+            Write("Property ", prop.name, " is not mapped to db.");
+
+        manager.WriteLine("// Mapping " + (prop.mapping == null ? "Not mapped to db" : prop.mapping));
+    }
+
+    manager.WriteLine("");
+    manager.WriteLine("");
+
+    // Default protected constructor
+    manager.Write("\t\tprotected ");
+    manager.Write(cmd.name);
+    manager.WriteLine("() {}");
+
+    // Public constructor
+    manager.Write("\t\tpublic ");
+    manager.Write(cmd.name);
+    manager.WriteLine("(string test) {}");
+
+    manager.WriteLine("\t}");
+    manager.WriteLine("");
+    manager.Write("}");
+}
+
 private void Generate(List<CustomCommand> cmds, Manager manager, DirectoryInfo t4DirInfo) 
 {
     var hostServiceProvider = (IServiceProvider) Host;
     var dte = (EnvDTE.DTE) hostServiceProvider.GetService(typeof(EnvDTE.DTE));
-    var projectItem = dte.Solution.FindProjectItem(Host.TemplateFile);
+    ProjectItem projectItem = dte.Solution.FindProjectItem(Host.TemplateFile);
 
     string resxFileName = Path.Combine(t4DirInfo.FullName, "CommandResources.resx");
     using (ResXResourceWriter resx = new ResXResourceWriter(resxFileName)) 
     {
 	    foreach (CustomCommand cmd in cmds) 
 	    {
-		    manager.Start(cmd.name + ".cs");
-		    //manager.StartNewFile(cmd.name + ".cs");
-            manager.WriteLine("namespace " + projectItem.ContainingProject.Name);
-            manager.WriteLine("{\n");
-            manager.Write("\tpublic partial class ");
-		    if (cmd.isComposite)
-                manager.WriteLine(cmd.name);
-            else
-                manager.WriteLine(cmd.name);
-
-            manager.Write("\t{");
-            manager.WriteLine("");
+		    WriteCommand(cmd, manager, projectItem);
+            WriteMapping(cmd, manager, projectItem);
             string displayName = cmd.name + "Name";
-            manager.WriteLine("\t\tpublic string DisplayName => CommandResources." + displayName + ";");
             resx.AddResource(displayName, cmd.displayName);
-
-            foreach (CustomProperty prop in cmd.properties)
-            {
-                manager.Write("\t\tpublic virtual ");
-                manager.Write(prop.type);
-                manager.Write(" ");
-                manager.Write(prop.name);
-                manager.Write(" { get; set; }");
-                if (prop.mapping == null)
-                    Write("Property " + prop.name + " is not mapped to db.");
-
-                manager.WriteLine("// Mapping " + (prop.mapping == null ? "Not mapped to db" : prop.mapping));
-            }
-
-            manager.WriteLine("\n");
-
-            // Default protected constructor
-            manager.Write("\t\tprotected ");
-            manager.Write(cmd.name);
-            manager.WriteLine("() {}");
-
-            // Public constructor
-            manager.Write("\t\tpublic ");
-            manager.Write(cmd.name);
-            manager.WriteLine("(string test) {}");
-
-            manager.WriteLine("\t}\n");
-            manager.Write("}");
         }
 
         resx.Generate();
@@ -134,6 +242,8 @@ class Manager
     private EnvDTE.ProjectItem templateProjectItem;
     private String outputPath;
     private Action<IEnumerable<String>> projectSyncAction;
+    private int _indent = 0;
+    private bool _isNewLine = true;
 
 
     internal Manager(ITextTemplatingEngineHost host) 
@@ -149,6 +259,16 @@ class Manager
         projectSyncAction = (IEnumerable<String> keepFileNames) => ProjectSync(templateProjectItem, keepFileNames);
     }
 
+    public void PushIndent() 
+    {
+        ++_indent;
+    }
+
+    public void RemoveIndent() 
+    {
+        --_indent;
+    }
+
     public void Start(String filename) 
     {
         _fileBlocks.Add(new FileBlock(filename));
@@ -156,12 +276,33 @@ class Manager
 
     public void Write(string text)
     {
+        if (_isNewLine)
+        {
+            for (int i = 0; i < _indent; ++i)
+                _fileBlocks[_fileBlocks.Count - 1].file.Append("\t");
+
+            _isNewLine = false;
+        }
+
         _fileBlocks[_fileBlocks.Count - 1].file.Append(text);
+    }
+
+    public void WriteLine()
+    {
+        _fileBlocks[_fileBlocks.Count - 1].file.AppendLine("");
+        _isNewLine = true;
     }
 
     public void WriteLine(string text)
     {
+        if (_isNewLine)
+        {
+            for (int i = 0; i < _indent; ++i)
+                _fileBlocks[_fileBlocks.Count - 1].file.Append("\t");
+        }
+
         _fileBlocks[_fileBlocks.Count - 1].file.AppendLine(text);
+        _isNewLine = true;
     }
 
     private bool IsFileContentDifferent(String fileName, String newContent) {
@@ -170,7 +311,11 @@ class Manager
 
     private void CreateFile(String fileName, String content) {
         if (IsFileContentDifferent(fileName, content))
+        {
+            CheckoutFileIfRequired(fileName);
             File.WriteAllText(fileName, content);
+            //AddToSourceControlIfRequired(fileName);
+        }
     }
 
     public void Process()
@@ -213,6 +358,20 @@ class Manager
                 templateProjectItem.ProjectItems.AddFromFile(filename);
             }
         }
+    }
+
+    private void CheckoutFileIfRequired(String fileName) 
+    {
+        var sc = dte.SourceControl;
+        if (sc != null && sc.IsItemUnderSCC(fileName) && !sc.IsItemCheckedOut(fileName))
+            sc.CheckOutItem(fileName);
+    }
+
+    private void AddToSourceControlIfRequired(String fileName) 
+    {
+        var sc = dte.SourceControl;
+        if (sc != null && !sc.IsItemUnderSCC(fileName))
+            dte.ExecuteCommand("Team.Git.AddToSourceControl", fileName);
     }
 
 }

@@ -46,6 +46,9 @@
     <Compile Include="AddObjectCommand.cs">
       <DependentUpon>CommandLoader.tt</DependentUpon>
     </Compile>
+    <Compile Include="AddObjectCommandMapping.cs">
+      <DependentUpon>CommandLoader.tt</DependentUpon>
+    </Compile>
     <Compile Include="CommandResources.Designer.cs">
       <AutoGen>True</AutoGen>
       <DesignTime>True</DesignTime>
@@ -56,7 +59,16 @@
     <Compile Include="SetMultipleValuesCommand.cs">
       <DependentUpon>CommandLoader.tt</DependentUpon>
     </Compile>
+    <Compile Include="SetMultipleValuesCommandMapping.cs">
+      <DependentUpon>CommandLoader.tt</DependentUpon>
+    </Compile>
     <Compile Include="TestClass.cs" />
+    <Compile Include="TestCommand.cs">
+      <DependentUpon>CommandLoader.tt</DependentUpon>
+    </Compile>
+    <Compile Include="TestCommandMapping.cs">
+      <DependentUpon>CommandLoader.tt</DependentUpon>
+    </Compile>
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
@@ -74,7 +86,9 @@
       <DesignTime>True</DesignTime>
       <DependentUpon>CommandLoader.tt</DependentUpon>
     </Content>
-    <Content Include="Commands.xml" />
+    <Content Include="Commands.xml">
+      <RunCustomToolOn>CommandLoader.tt</RunCustomToolOn>
+    </Content>
   </ItemGroup>
   <ItemGroup>
     <Service Include="{508349B6-6B84-4DF5-91F0-309BEEBAD82D}" />

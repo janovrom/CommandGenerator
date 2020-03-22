@@ -1,16 +1,18 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
 <CommandSchema namespace="some.random.namespace">
-  <Composites>
+  <MultiCmd namespace=".Services.Commands">
     <SetMultipleValuesCommand name="Set values">
       <ChangedObject type="string" map="ManyToOne"></ChangedObject>
       <OldValue type="double" map="Property"></OldValue>
-      <NewValue type="double" map="property"></NewValue>
+      <NewValue type="double" map="Property"></NewValue>
     </SetMultipleValuesCommand>
-  </Composites>
-  <Commands>
+  </MultiCmd>
+  <SingleCmd namespace=".Services.Commands">
     <AddObjectCommand name="Add object">
-      <ChangedObject type="string" map="manytoone"></ChangedObject>
+      <ChangedObject type="string" map="ManyToOne"></ChangedObject>
       <RandomValue type="object"></RandomValue>
     </AddObjectCommand>
-  </Commands>
+    <TestCommand name="Tst">
+    </TestCommand>
+  </SingleCmd>
 </CommandSchema>

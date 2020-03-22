@@ -77,5 +77,14 @@ namespace CommandGenerator {
                 return ResourceManager.GetString("SetMultipleValuesCommandName", resourceCulture);
             }
         }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Tst.
+        /// </summary>
+        public static string TestCommandName {
+            get {
+                return ResourceManager.GetString("TestCommandName", resourceCulture);
+            }
+        }
     }
 }

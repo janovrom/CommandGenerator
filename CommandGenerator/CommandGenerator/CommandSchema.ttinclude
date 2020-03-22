@@ -4,9 +4,12 @@
 <#@ import namespace="System.Collections.Generic" #><#+
 public class CustomCommand
 {
-    public bool isComposite;
     public string name;
+    public string cmdNamespace;
+    public string parentName;
+    public string parentNamespace;
     public string displayName;
+    public bool isPersistable = false;
     public List<CustomProperty> properties = new List<CustomProperty>();
 }
 
@@ -15,5 +18,6 @@ public class CustomProperty
     public string type;
     public string name;
     public string mapping;
+    public bool canBeNull = true;
 }
 #>

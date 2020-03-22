@@ -123,4 +123,7 @@
   <data name="AddObjectCommandName" xml:space="preserve">
     <value>Add object</value>
   </data>
+  <data name="TestCommandName" xml:space="preserve">
+    <value>Tst</value>
+  </data>
 </root>

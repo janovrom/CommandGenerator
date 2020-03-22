@@ -1,10 +1,14 @@
-namespace CommandGenerator
+using CommandGenerator.Services.Commands;
+using CommandGenerator;
+
+namespace CommandGenerator.Services.Commands
 {
 
-	public partial class AddObjectCommand
+	public partial class AddObjectCommand : SingleCmd
 	{
-		public string DisplayName => CommandResources.AddObjectCommandName;
-		public virtual string ChangedObject { get; set; }// Mapping manytoone
+		public override string DisplayName => CommandResources.AddObjectCommandName;
+		public override bool IsPersistable => false;
+		public virtual string ChangedObject { get; set; }// Mapping ManyToOne
 		public virtual object RandomValue { get; set; }// Mapping Not mapped to db
 
 

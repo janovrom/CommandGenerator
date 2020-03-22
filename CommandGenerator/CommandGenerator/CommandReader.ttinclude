@@ -4,19 +4,33 @@
 <#@ import namespace="System.Text" #>
 <#@ import namespace="System.Collections.Generic" #>
 <#@ import namespace="System.Xml" #><#+
-CustomCommand GetCommand(XmlNode node, bool isComposite)
+CustomCommand GetCommand(XmlNode node, string parentName, string parentNamespace)
 {
     CustomCommand cmd = new CustomCommand();
-    cmd.isComposite = isComposite;
+    cmd.parentName = parentName;
+    cmd.parentNamespace = parentNamespace;
     cmd.name = node.Name;
 
+    bool namespaceFound = false;
     foreach (XmlAttribute attribute in node.Attributes)
     {
         if (attribute.Name.ToLowerInvariant().Equals("name"))
         {
             cmd.displayName = attribute.Value;
         }
+        else if (attribute.Name.ToLowerInvariant().Equals("namespace")) 
+        {
+            cmd.cmdNamespace = attribute.Value;
+            namespaceFound = true;
+        }
+        else if (attribute.Name.ToLowerInvariant().Equals("persist") || attribute.Name.ToLowerInvariant().Equals("persistable"))
+        {
+            cmd.isPersistable = true;
+        }
     }
+
+    if (!namespaceFound)
+        cmd.cmdNamespace = parentNamespace;
 
     foreach (XmlNode property in node.ChildNodes)
     {
@@ -29,6 +43,8 @@ CustomCommand GetCommand(XmlNode node, bool isComposite)
                 prop.type = attribute.Value;
             else if (attribute.Name.ToLowerInvariant().Equals("map"))
                 prop.mapping = attribute.Value;
+            else if (attribute.Name.ToLowerInvariant().Equals("nullable"))
+                prop.canBeNull = bool.Parse(attribute.Value);
         }
 
         cmd.properties.Add(prop);
@@ -40,16 +56,14 @@ CustomCommand GetCommand(XmlNode node, bool isComposite)
 List<CustomCommand> Read(XmlDocument doc)
 {
     XmlNode schema = doc.SelectSingleNode("CommandSchema");
-
-    XmlNode composites = doc.SelectSingleNode("//Composites");
-    XmlNode commands = doc.SelectSingleNode("//Commands");
     List<CustomCommand> cmds = new List<CustomCommand>();
-
-    foreach (XmlNode node in composites.ChildNodes)
-        cmds.Add(GetCommand(node, true));
-
-    foreach (XmlNode node in commands.ChildNodes)
-        cmds.Add(GetCommand(node, false));
+    foreach (XmlNode node in schema.ChildNodes)
+    {
+        string nodeNamespace = node.Attributes["namespace"]?.Value;
+        string nodeName = node.Name;
+        foreach (XmlNode cmd in node.ChildNodes)
+            cmds.Add(GetCommand(cmd, nodeName, nodeNamespace));
+    }
 
     return cmds;
 }

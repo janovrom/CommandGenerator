@@ -1,0 +1,1 @@
+﻿Property RandomValue of class AddObjectCommand is not mapped to db.

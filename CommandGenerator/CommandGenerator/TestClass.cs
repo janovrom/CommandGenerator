@@ -1,8 +1,10 @@
-﻿using System;
+﻿#pragma warning disable IDE0060 // Remove unused parameter
+#pragma warning disable IDE0051 // Private member is unused
+#pragma warning disable IDE0017 // Object initialization can be simplified
+
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Xml;
 
 public class CustomCommand
@@ -12,6 +14,7 @@ public class CustomCommand
     public string parentName;
     public string parentNamespace;
     public string displayName;
+    public bool isPersistable = false;
     public List<CustomProperty> properties = new List<CustomProperty>();
 }
 
@@ -20,13 +23,28 @@ public class CustomProperty
     public string type;
     public string name;
     public string mapping;
+    public bool canBeNull = true;
 }
+
+public class IdEntity
+{
+    public int Id;
+    public Scene Entity;
+}
+
+public class SomeEntity1 : IdEntity { }
+public class SomeEntity2 : IdEntity { }
+public class SomeEntity3 : IdEntity { }
+public class SomeEntity4 : IdEntity { }
+public class SomeEntity5 : IdEntity { }
 
 public abstract class SharedCmd
 {
 
     public abstract string DisplayName { get; }
     public abstract bool IsPersistable { get; }
+    public Scene Entity;
+    public int Id { get; }
 
 }
 
@@ -99,11 +117,24 @@ public class TestClass {
 
 }
 
+public class Scene
+{
+    public int Id;
+}
 
 namespace NHibernate.Mapping.ByCode.Conformist
 {
+    public static class NHibernateExtension
+    {
+        public static IList<T> List<T>(this IEnumerable<T> enumerable)
+        {
+            return enumerable.ToList();
+        }
+    }
+
     public class Map
     {
+
         internal void Column(string v)
         {
         }
@@ -126,3 +157,7 @@ namespace NHibernate.Mapping.ByCode.Conformist
 		}
     }
 }
+
+#pragma warning restore IDE0060 // Remove unused parameter
+#pragma warning restore IDE0051 // Private member is unused
+#pragma warning restore IDE0017 // Object initialization can be simplified

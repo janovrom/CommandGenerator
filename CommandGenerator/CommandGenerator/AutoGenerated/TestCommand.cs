@@ -6,7 +6,7 @@ namespace CommandGenerator.Services.Commands
 
 	public partial class TestCommand : SingleCmd
 	{
-		public override string DisplayName => CommandResources.TestCommandName;
+		public override string DisplayName => CommandGenerator.CommandResources.TestCommandName;
 		public override bool IsPersistable => false;
 
 

@@ -20,8 +20,9 @@
 <#@ import namespace="System.Text" #>
 <#@ import namespace="System.Collections.Generic" #>
 <#@ import namespace="Microsoft.VisualStudio.TextTemplating" #>
-<#@ include file="CommandSchema.ttinclude" #>
-<#@ include file="CommandReader.ttinclude" #>
+<#@ include file="../CommandSchema.ttinclude" #>
+<#@ include file="../CommandReader.ttinclude" #>
+<#@ include file="../MultipleOutputHelper.ttinclude" #>
 <#@ output extension=".txt" #><#
 var serviceProvider = this.Host as IServiceProvider;
 var dte = serviceProvider.GetService(typeof(DTE)) as DTE;
@@ -38,8 +39,126 @@ var t4DirInfo = new FileInfo(Host.TemplateFile).Directory;
 Generate(cmds, manager, t4DirInfo);
 manager.Process();
 #><#+
-private void WriteMapping(CustomCommand cmd, Manager manager, ProjectItem projectItem)
+private string FirstLower(string s)
 {
+    char[] ch = s.ToCharArray();
+    ch[0] = char.ToLower(ch[0]);
+    return new string(ch);
+}
+
+private void WriteLoader(Manager manager, string loaderNamespace, List<CustomCommand> cmds, HashSet<string> namespaces, HashSet<string> propertyTypes) 
+{
+    manager.Start("Scene3DLoader.cs");
+    foreach (string nspace in namespaces)
+    {
+        manager.Write("using ");
+        manager.Write(loaderNamespace + nspace);
+        manager.WriteLine(";");
+    }
+    manager.WriteLine("using System.Collections.Generic;");
+    manager.WriteLine("using System.Linq;");
+    manager.WriteLine("using NHibernate.Mapping.ByCode.Conformist;");
+    manager.WriteLine();
+
+    manager.Write("namespace ");
+    manager.WriteLine(loaderNamespace);
+    manager.WriteLine("{"); // Namespace
+    manager.PushIndent();
+
+    manager.WriteLine("public partial class Scene3DLoader");
+    manager.WriteLine("{"); // Class
+    manager.WriteLine();
+    manager.PushIndent();
+
+    manager.WriteLine();
+
+    // Declare Dictionaries
+    foreach (string propType in propertyTypes)
+    {
+        string fl = FirstLower(propType);
+        manager.WriteLine("private Dictionary<int, ", propType, "> _", fl, ";");
+    }
+
+    manager.WriteLine();
+
+    manager.WriteLine("partial void InitializeCommands()"); // Start method
+    manager.WriteLine("{");
+    manager.PushIndent();
+
+    manager.WriteLine("// Initialize structures");
+    // Load commands
+    foreach (CustomCommand cmd in cmds) 
+    {
+        manager.Write("var cmd");
+        manager.Write(cmd.name);
+        manager.Write(" = _session.QueryOver<");
+        manager.Write(cmd.name);
+        manager.WriteLine(">().Where(x => x.Entity.Id == scene.Id).List();");
+    }
+
+    manager.WriteLine();
+
+    // Load used entities
+    foreach (string propType in propertyTypes)
+    {
+        string fl = FirstLower(propType);
+        manager.Write("_");
+        manager.Write(fl);
+        manager.Write(" = _session.QueryOver<");
+        manager.Write(propType);
+        manager.Write(">().Where(x => x.Entity.Id == scene.Id).List().ToDictionary<");
+        manager.Write(propType);
+        manager.WriteLine(", int>(entity => entity.Id);");
+    }
+
+    manager.WriteLine();
+    manager.WriteLine("// Unproxy commands and set the global dictionary");
+    foreach (CustomCommand cmd in cmds) 
+    {
+        manager.Write("foreach (");
+        manager.Write(cmd.name);
+        manager.Write(" cmd in cmd");
+        manager.Write(cmd.name);
+        manager.WriteLine(")"); 
+        manager.WriteLine("{"); 
+        manager.PushIndent(); // Foreach block
+        manager.WriteLine("_commands[cmd.Id] = cmd;");
+        
+
+        foreach (CustomProperty prop in cmd.properties)
+        {
+            if (propertyTypes.Contains(prop.type))
+            {
+                manager.Write("cmd.");
+                manager.Write(prop.name);
+                manager.Write(" = _");
+                manager.Write(FirstLower(prop.type));
+                manager.Write("[cmd.");
+                manager.Write(prop.name);
+                manager.WriteLine(".Id];");
+            }
+        }
+
+        manager.RemoveIndent();
+        manager.WriteLine("}"); // End foreach
+        manager.WriteLine();
+    }
+
+    manager.RemoveIndent();
+    manager.WriteLine("}"); // End method
+
+    manager.WriteLine();
+    manager.RemoveIndent();
+    manager.WriteLine("}"); // End class
+
+    manager.RemoveIndent();
+    manager.WriteLine("}"); // End namespace
+}
+
+private void WriteMapping(CustomCommand cmd, Manager manager, ProjectItem projectItem, HashSet<string> namespaces, HashSet<string> propertyTypes)
+{
+    if (!namespaces.Contains(cmd.cmdNamespace)) namespaces.Add(cmd.cmdNamespace);
+    
     var mappingName = cmd.name + "Mapping";
     var mappingFileName = mappingName +".cs";
     manager.Start(mappingFileName);
@@ -94,6 +213,8 @@ private void WriteMapping(CustomCommand cmd, Manager manager, ProjectItem projec
             manager.Write("map.NotNullable(");
             manager.Write(prop.canBeNull.ToString().ToLowerInvariant());
             manager.WriteLine(");");
+
+            if (!propertyTypes.Contains(prop.type)) propertyTypes.Add(prop.type);
         }
 
         manager.WriteLine("map.Column(\"" + prop.name + "\");");
@@ -149,7 +270,7 @@ private void WriteCommand(CustomCommand cmd, Manager manager, ProjectItem projec
     manager.Write("\t{");
     manager.WriteLine("");
     string displayName = cmd.name + "Name";
-    manager.WriteLine("\t\tpublic override string DisplayName => CommandResources." + displayName + ";");
+    manager.WriteLine("\t\tpublic override string DisplayName => " + projectItem.ContainingProject.Name + ".CommandResources." + displayName + ";");
     manager.WriteLine("\t\tpublic override bool IsPersistable => " + cmd.isPersistable.ToString().ToLowerInvariant() + ";");
                 
     foreach (CustomProperty prop in cmd.properties)
@@ -160,7 +281,7 @@ private void WriteCommand(CustomCommand cmd, Manager manager, ProjectItem projec
         manager.Write(prop.name);
         manager.Write(" { get; set; }");
         if (prop.mapping == null)
-            Write("Property ", prop.name, " is not mapped to db.");
+            Write("Property " + prop.name + " of class " + cmd.name + " is not mapped to db.");
 
         manager.WriteLine("// Mapping " + (prop.mapping == null ? "Not mapped to db" : prop.mapping));
     }
@@ -192,13 +313,18 @@ private void Generate(List<CustomCommand> cmds, Manager manager, DirectoryInfo t
     string resxFileName = Path.Combine(t4DirInfo.FullName, "CommandResources.resx");
     using (ResXResourceWriter resx = new ResXResourceWriter(resxFileName)) 
     {
+        HashSet<string> namespaces = new HashSet<string>();
+        HashSet<string> propertyTypes = new HashSet<string>();
+
 	    foreach (CustomCommand cmd in cmds) 
 	    {
 		    WriteCommand(cmd, manager, projectItem);
-            WriteMapping(cmd, manager, projectItem);
+            WriteMapping(cmd, manager, projectItem, namespaces, propertyTypes);
             string displayName = cmd.name + "Name";
             resx.AddResource(displayName, cmd.displayName);
         }
+
+        WriteLoader(manager, projectItem.ContainingProject.Name, cmds, namespaces, propertyTypes);
 
         resx.Generate();
         resx.Close();
@@ -210,7 +336,16 @@ private void Generate(List<CustomCommand> cmds, Manager manager, DirectoryInfo t
     //manager.EndBlock();
     
     manager.Process();
-    SetAndRunResXFileCodeGenerator(t4DirInfo, resxFileName);
+    int start = projectItem.ContainingProject.FullName.Split('\\').Length;
+    var spaces =  t4DirInfo.FullName.Split('\\');
+    StringBuilder sb = new StringBuilder();
+    for (int i = start; i < spaces.Length; ++i) 
+    {
+        sb.Append(spaces[i]);
+        if (i + 1 < spaces.Length) sb.Append(".");
+    }
+
+    SetAndRunResXFileCodeGenerator(t4DirInfo, resxFileName, projectItem.ContainingProject.Name);
 }
 
 private void SetAndRunResXFileCodeGenerator(DirectoryInfo t4DirInfo, string fileName, string nameSpace = "")
@@ -221,158 +356,5 @@ private void SetAndRunResXFileCodeGenerator(DirectoryInfo t4DirInfo, string file
     projectItem.Properties.Item("CustomTool").Value = "PublicResXFileCodeGenerator";
     projectItem.Properties.Item("CustomToolNamespace").Value = nameSpace;
     ((VSProjectItem)projectItem.Object).RunCustomTool();
-}
-
-class Manager 
-{
-    
-    private class FileBlock
-    {
-        internal StringBuilder file = new StringBuilder();
-        internal String name;
-
-        public FileBlock(String name)
-        {
-            this.name = name;
-        }
-    }
-
-    private List<FileBlock> _fileBlocks = new List<FileBlock>();
-    private EnvDTE.DTE dte;
-    private EnvDTE.ProjectItem templateProjectItem;
-    private String outputPath;
-    private Action<IEnumerable<String>> projectSyncAction;
-    private int _indent = 0;
-    private bool _isNewLine = true;
-
-
-    internal Manager(ITextTemplatingEngineHost host) 
-    {
-        var hostServiceProvider = (IServiceProvider) host;
-        if (hostServiceProvider == null)
-                throw new ArgumentNullException("Could not obtain IServiceProvider");
-        dte = (EnvDTE.DTE) hostServiceProvider.GetService(typeof(EnvDTE.DTE));
-        if (dte == null)
-            throw new ArgumentNullException("Could not obtain DTE from host");
-        templateProjectItem = dte.Solution.FindProjectItem(host.TemplateFile);
-        outputPath = Path.GetDirectoryName(host.TemplateFile);
-        projectSyncAction = (IEnumerable<String> keepFileNames) => ProjectSync(templateProjectItem, keepFileNames);
-    }
-
-    public void PushIndent() 
-    {
-        ++_indent;
-    }
-
-    public void RemoveIndent() 
-    {
-        --_indent;
-    }
-
-    public void Start(String filename) 
-    {
-        _fileBlocks.Add(new FileBlock(filename));
-    }
-
-    public void Write(string text)
-    {
-        if (_isNewLine)
-        {
-            for (int i = 0; i < _indent; ++i)
-                _fileBlocks[_fileBlocks.Count - 1].file.Append("\t");
-
-            _isNewLine = false;
-        }
-
-        _fileBlocks[_fileBlocks.Count - 1].file.Append(text);
-    }
-
-    public void WriteLine()
-    {
-        _fileBlocks[_fileBlocks.Count - 1].file.AppendLine("");
-        _isNewLine = true;
-    }
-
-    public void WriteLine(string text)
-    {
-        if (_isNewLine)
-        {
-            for (int i = 0; i < _indent; ++i)
-                _fileBlocks[_fileBlocks.Count - 1].file.Append("\t");
-        }
-
-        _fileBlocks[_fileBlocks.Count - 1].file.AppendLine(text);
-        _isNewLine = true;
-    }
-
-    private bool IsFileContentDifferent(String fileName, String newContent) {
-        return !(File.Exists(fileName) && File.ReadAllText(fileName) == newContent);
-    }
-
-    private void CreateFile(String fileName, String content) {
-        if (IsFileContentDifferent(fileName, content))
-        {
-            CheckoutFileIfRequired(fileName);
-            File.WriteAllText(fileName, content);
-            //AddToSourceControlIfRequired(fileName);
-        }
-    }
-
-    public void Process()
-    {
-        List<String> generatedFileNames = new List<String>();
-        foreach (FileBlock fb in _fileBlocks)
-        {
-            var fileName = Path.Combine(outputPath, fb.name);
-            CreateFile(fileName, fb.file.ToString());
-            generatedFileNames.Add(fileName);
-        }
-
-        projectSyncAction.EndInvoke(projectSyncAction.BeginInvoke(generatedFileNames, null, null));
-        templateProjectItem.ContainingProject.Save();
-    }
-
-    private static void ProjectSync(EnvDTE.ProjectItem templateProjectItem, IEnumerable<String> keepFileNames)
-    {
-        var keepFileNameSet = new HashSet<String>(keepFileNames);
-        var originalFilePrefix = Path.GetFileNameWithoutExtension(templateProjectItem.Name) + ".";
-        var projectFiles = new Dictionary<String, EnvDTE.ProjectItem>();
-        foreach (EnvDTE.ProjectItem item in templateProjectItem.ProjectItems) 
-        {
-            // Get current items under the template
-            projectFiles.Add(item.get_FileNames(0), item);
-        }
-
-        // Remove unused items
-        foreach (var pair in projectFiles)
-        {
-            if (!keepFileNameSet.Contains(pair.Key) && !(Path.GetFileNameWithoutExtension(pair.Key) + ".").StartsWith(originalFilePrefix))
-                pair.Value.Delete();
-        }
-
-        // Add missing files
-        foreach (String filename in keepFileNameSet) 
-        {
-            if (!projectFiles.ContainsKey(filename)) 
-            {
-                templateProjectItem.ProjectItems.AddFromFile(filename);
-            }
-        }
-    }
-
-    private void CheckoutFileIfRequired(String fileName) 
-    {
-        var sc = dte.SourceControl;
-        if (sc != null && sc.IsItemUnderSCC(fileName) && !sc.IsItemCheckedOut(fileName))
-            sc.CheckOutItem(fileName);
-    }
-
-    private void AddToSourceControlIfRequired(String fileName) 
-    {
-        var sc = dte.SourceControl;
-        if (sc != null && !sc.IsItemUnderSCC(fileName))
-            dte.ExecuteCommand("Team.Git.AddToSourceControl", fileName);
-    }
-
 }
 #>

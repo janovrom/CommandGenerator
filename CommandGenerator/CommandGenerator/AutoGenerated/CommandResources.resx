@@ -120,6 +120,12 @@
   <data name="SetMultipleValuesCommandName" xml:space="preserve">
     <value>Set values</value>
   </data>
+  <data name="SetMultipleValuesCommand2Name" xml:space="preserve">
+    <value>Set values 2</value>
+  </data>
+  <data name="SetMultipleValuesCommand3Name" xml:space="preserve">
+    <value>Set values 3</value>
+  </data>
   <data name="AddObjectCommandName" xml:space="preserve">
     <value>Add object</value>
   </data>

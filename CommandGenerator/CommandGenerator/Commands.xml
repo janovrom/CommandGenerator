@@ -1,15 +1,26 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
-<CommandSchema namespace="some.random.namespace">
+<CommandSchema>
   <MultiCmd namespace=".Services.Commands">
     <SetMultipleValuesCommand name="Set values">
-      <ChangedObject type="string" map="ManyToOne"></ChangedObject>
+      <ChangedObject type="SomeEntity1" map="ManyToOne"></ChangedObject>
       <OldValue type="double" map="Property"></OldValue>
       <NewValue type="double" map="Property"></NewValue>
     </SetMultipleValuesCommand>
+    <SetMultipleValuesCommand2 name="Set values 2">
+      <ChangedObject type="SomeEntity2" map="ManyToOne"></ChangedObject>
+      <OldValue type="double" map="Property"></OldValue>
+      <NewValue type="double" map="Property"></NewValue>
+    </SetMultipleValuesCommand2>
+    <SetMultipleValuesCommand3 name="Set values 3">
+      <ChangedObject type="SomeEntity3" map="ManyToOne"></ChangedObject>
+      <OldValue type="double" map="Property"></OldValue>
+      <NewValue type="double" map="Property"></NewValue>
+    </SetMultipleValuesCommand3>
   </MultiCmd>
   <SingleCmd namespace=".Services.Commands">
     <AddObjectCommand name="Add object">
-      <ChangedObject type="string" map="ManyToOne"></ChangedObject>
+      <ChangedObject type="SomeEntity4" map="ManyToOne"></ChangedObject>
+      <OldObject type="SomeEntity5" map="ManyToOne"></OldObject>
       <RandomValue type="object"></RandomValue>
     </AddObjectCommand>
     <TestCommand name="Tst">

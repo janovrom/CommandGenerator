@@ -17,6 +17,12 @@ namespace CommandGenerator.Services.Commands.Mappings
 				map.Column("ChangedObject");
 			});
 
+			ManyToOne(x => x.OldObject, map =>
+			{
+				map.NotNullable(true);
+				map.Column("OldObject");
+			});
+
 
 			InitializeOther();
 		}
